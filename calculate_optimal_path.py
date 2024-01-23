@@ -17,11 +17,12 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     df['Play Duration Milliseconds'] = df.groupby((~df['Is Same Song Session']).cumsum())['Play Duration Milliseconds'].transform('sum')
     df = df[~df['Is Same Song Session']].drop(columns=['Time Difference Milliseconds', 'Is Same Song Session'])
 
-    # Remove streams which are too short, have no track identifier or have been played for less than 5 minutes in total
+    # Remove streams which are too short, have no track identifier, have been played for less than 5 minutes in total or only once in total
     df = df[
         (df['Play Duration Milliseconds'] > 25000) &
         (df['Track Identifier'].notna()) &
-        (df.groupby('Song Name')['Play Duration Milliseconds'].transform('sum') > 300000)
+        (df.groupby('Song Name')['Play Duration Milliseconds'].transform('sum') > 300000) &
+        (df.groupby('Song Name')['Song Name'].transform('count') > 1)
     ]
 
     print(f'Number of songs: {len(df)}, unique: {len(df["Track Identifier"].unique())}, finished preprocessing.')
@@ -40,6 +41,7 @@ def graph_data(df: pd.DataFrame) -> nx.DiGraph:
     for i, j in zip(songs, songs[1:]):
         G.add_edge(i, j, weight=G.get_edge_data(i, j, {'weight': 0})['weight'] + 1)
     
+    print(f'Created graph with {len(G.nodes())} nodes and {len(G.edges())} edges.')
     return G
 
 
@@ -47,10 +49,9 @@ def find_best_path(G: nx.DiGraph, num_attempts: int = 50) -> list:
     """
     Find the best path in the graph using a greedy algorithm and jump to the next unvisited node with the highest out-degree if necessary.
     """
-    def find_path_from_node(G: nx.DiGraph, start_node: str) -> tuple:
-        path = [start_node]
+    def find_path_from_node(G: nx.DiGraph, current_node: str) -> tuple:
+        path = [current_node]
         visited = set(path)
-        current_node = start_node
         total_weight = 0
 
         while len(visited) < len(G.nodes()):
@@ -66,9 +67,9 @@ def find_best_path(G: nx.DiGraph, num_attempts: int = 50) -> list:
                 # node with the highest out-degree that's not visited yet
                 remaining_nodes = [node for node in sorted_nodes if node not in visited]
                 if not remaining_nodes:
-                    break  # No more nodes to visit
+                    break
                 next_node = remaining_nodes[0]
-                # Weight for jumps is considered zero or average weight
+                # Add the average weight of the graph in case of a jump
                 total_weight += avg_weight
 
             # Visit the next node
