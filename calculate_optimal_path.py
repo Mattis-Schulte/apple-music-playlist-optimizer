@@ -1,3 +1,4 @@
+import csv
 import networkx as nx
 import pandas as pd
 import random
@@ -29,11 +30,11 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def graph_data(df: pd.DataFrame) -> nx.DiGraph:
+def graph_data(df: pd.DataFrame) -> nx.Graph:
     """
     Create a directed graph from the data, where each node represents a song and each edge represents a transition from one song to another.
     """
-    G = nx.DiGraph()
+    G = nx.Graph()
     songs = df['Song Name'].tolist()
     
     # Loop through the songs, creating an edge between each song and the next one
@@ -45,11 +46,11 @@ def graph_data(df: pd.DataFrame) -> nx.DiGraph:
     return G
 
 
-def find_best_path(G: nx.DiGraph, num_attempts: int = 50) -> list:
+def find_best_path(G: nx.Graph, num_attempts: int = 50) -> list:
     """
-    Find the best path in the graph using a greedy algorithm and jump to the next unvisited node with the highest out-degree if necessary.
+    Find the best path in the graph using a greedy algorithm and jump to the next unvisited node with the highest degree if necessary.
     """
-    def find_path_from_node(G: nx.DiGraph, current_node: str) -> tuple:
+    def find_path_from_node(G: nx.Graph, current_node: str) -> tuple:
         path = [current_node]
         visited = set(path)
         total_weight = 0
@@ -64,7 +65,7 @@ def find_best_path(G: nx.DiGraph, num_attempts: int = 50) -> list:
                 total_weight += weight
             else:
                 # If there are no unvisited neighbors, jump to the next unvisited
-                # node with the highest out-degree that's not visited yet
+                # node with the highest degree that's not visited yet
                 remaining_nodes = [node for node in sorted_nodes if node not in visited]
                 if not remaining_nodes:
                     break
@@ -80,7 +81,7 @@ def find_best_path(G: nx.DiGraph, num_attempts: int = 50) -> list:
         return path, total_weight
 
     # Pre-calculate some graph properties
-    sorted_nodes = sorted(G.nodes(), key=lambda n: G.out_degree(n, weight='weight'), reverse=True)
+    sorted_nodes = sorted(G.nodes(), key=lambda n: G.degree(n, weight='weight'), reverse=True)
     avg_weight = sum(data['weight'] for _, _, data in G.edges(data=True)) / G.number_of_edges()
 
     # Run the find_path_from_node function num_attempts times
@@ -99,6 +100,19 @@ def find_best_path(G: nx.DiGraph, num_attempts: int = 50) -> list:
     return best_path
 
 
+def export_graph(G: nx.Graph, export_path: str):
+    """
+    Export the graph to a csv file. This csv file can be imported into Cosmograph for visualization.
+    See: https://cosmograph.app/
+    """
+    with open(export_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+        writer.writerow(['source', 'target', 'value'])
+        for source, target, data in G.edges(data=True):
+            writer.writerow([source, target, data["weight"]])
+    print(f'Data successfully exported to {export_path}.')
+    
+
 def export_path(df: pd.DataFrame, path: list, export_path: str):
     """
     Export the calculated path to a sqlite3 database while also retaining the Track Identifier and Media Duration In Milliseconds columns.
@@ -115,3 +129,4 @@ if __name__ == '__main__':
     G = graph_data(df)
     path = find_best_path(G)
     export_path(df, path, 'calculated_path.sqlite3')
+    # export_graph(G, 'graph.csv') # Uncomment this line to export the graph as a csv file for visualization purposes in Cosmograph
