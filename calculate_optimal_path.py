@@ -48,6 +48,9 @@ def graph_data(df: pd.DataFrame) -> nx.Graph:
 
 
 def find_path(G: nx.Graph, start_node: str) -> list:
+    """
+    Find the best path in the graph using a greedy algorithm, jump to the closest unvisited node if no unvisited neighbors are available.
+    """
     path = [start_node]
     visited = set(path)
 
@@ -72,11 +75,10 @@ def find_path(G: nx.Graph, start_node: str) -> list:
             next_node, weight = max(neighbors, key=lambda x: x[1])
             total_weight += weight
         else:
-            # Find the the closest unvisited node
-            neighbors = [(node, shortest_paths[current_node][node])
-                            for node in G.nodes()
-                            if node not in visited]
+            # Find the closest unvisited neighbor with the highest degree
+            neighbors = [(node, shortest_paths[current_node][node]) for node in G.nodes() if node not in visited]
             next_node, path_length = min(neighbors, key=lambda x: (x[1], -G.degree(x[0], weight='weight')))
+            
             # Add the average weight of the graph in case of a jump
             total_weight += mode_weight
             total_jumps += 1

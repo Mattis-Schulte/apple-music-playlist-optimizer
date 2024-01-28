@@ -13,7 +13,7 @@ This step is necessary as ```Apple Music Play Activity``` does not contain the t
 Place the path to both files in the corresponding fields at the bottom of the script and run the script (this might take multiple hours based on the size of the files). The output will be a file called ```identified_songs```, which will contain both the track identifiers and the timestamps as well as the play durations and media durations for each stream.
 
 ## Calculating the optimal order
-To now calculate the optimal order of the songs, run the script ```calculate_optimal_path.py```. This will create a graph of the songs and their relationships to each other, which will then be used to choose the optimal order based on the weights of the edges. The output will be a file called ```calculated_path```, which will contain the songs in their calculated optimal order. 
+To now calculate the optimal order of the songs, run the script ```calculate_optimal_path.py```. This will create a graph of the songs and their relationships to each other, which will then be used to choose the optimal order based on the weights of the edges (this might again take a while). The output will be a file called ```calculated_path```, which will contain the songs in their calculated optimal order. 
 >Please note that all songs that were not played for a cumulative duration of at least five minutes will be excluded from the playlist. Streams that lasted less than 25 seconds will also be deemed as skipped and therefore are not included in the calculation of the optimal order.
 
 ## Uploading the playlist
