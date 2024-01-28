@@ -1,3 +1,4 @@
+from collections import Counter
 import csv
 import networkx as nx
 import pandas as pd
@@ -38,26 +39,30 @@ def graph_data(df: pd.DataFrame) -> nx.Graph:
     songs = df['Song Name'].tolist()
     
     # Loop through the songs, creating an edge between each song and the next one
-    # If the edge already exists, increase its weight by 1
+    # If the edge already exists, increase its weight by 1 plus some random fuzz
     for i, j in zip(songs, songs[1:]):
-        G.add_edge(i, j, weight=G.get_edge_data(i, j, {'weight': 0})['weight'] + 1)
+        G.add_edge(i, j, weight=G.get_edge_data(i, j, {'weight': 0})['weight'] + random.uniform(0.95, 1.05))
     
     print(f'Created graph with {len(G.nodes())} nodes and {len(G.edges())} edges.')
     return G
 
 
-def find_path(G: nx.Graph, current_node: str) -> tuple:
-    """
-    Find the best path in the graph using a greedy algorithm and jump to the next unvisited node with the highest degree if necessary.
-    """
-    path = [current_node]
+def find_path(G: nx.Graph, start_node: str) -> list:
+    path = [start_node]
     visited = set(path)
+
+    # Find the most common weight in the graph
+    weights = Counter(data['weight'] for u, v, data in G.edges(data=True))
+    mode_weight = weights.most_common(1)[0][0]
+
+    # Precompute the shortest paths between each node
+    print('Precomputing shortest paths...') 
+    shortest_paths = dict(nx.all_pairs_shortest_path_length(G))
+
+    current_node = start_node
     total_weight, total_jumps = 0, 0
 
-    # Pre-calculate some graph properties
-    sorted_nodes = sorted(G.nodes(), key=lambda n: G.degree(n, weight='weight'), reverse=True)
-    avg_weight = sum(data['weight'] for _, _, data in G.edges(data=True)) / G.number_of_edges()
-
+    print('Finding optimal path...')
     while len(visited) < len(G.nodes()):
         # Find the heaviest unvisited neighbor
         neighbors = [(neighbor, G[current_node][neighbor]['weight'])
@@ -67,14 +72,13 @@ def find_path(G: nx.Graph, current_node: str) -> tuple:
             next_node, weight = max(neighbors, key=lambda x: x[1])
             total_weight += weight
         else:
-            # If there are no unvisited neighbors, jump to the next unvisited
-            # node with the highest degree that's not visited yet
-            remaining_nodes = [node for node in sorted_nodes if node not in visited]
-            if not remaining_nodes:
-                break
-            next_node = remaining_nodes[0]
+            # Find the the closest unvisited node
+            neighbors = [(node, shortest_paths[current_node][node])
+                            for node in G.nodes()
+                            if node not in visited]
+            next_node, path_length = min(neighbors, key=lambda x: (x[1], -G.degree(x[0], weight='weight')))
             # Add the average weight of the graph in case of a jump
-            total_weight += avg_weight
+            total_weight += mode_weight
             total_jumps += 1
 
         # Visit the next node
@@ -82,8 +86,8 @@ def find_path(G: nx.Graph, current_node: str) -> tuple:
         visited.add(next_node)
         current_node = next_node
 
-    print(f'Found path with {len(path)} nodes, {total_jumps} jumps and a total weight of {total_weight}.')
-    return path, total_weight
+    print(f'Found path with {len(path)} songs, {total_jumps} jumps and a total weight of {total_weight}.')
+    return path
 
 
 def export_graph(G: nx.Graph, export_path: str):
@@ -91,28 +95,28 @@ def export_graph(G: nx.Graph, export_path: str):
     Export the graph to a csv file. This csv file can be imported into Cosmograph for visualization.
     See: https://cosmograph.app/
     """
+    print(f'Exporting graph to {export_path}...')
     with open(export_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f, quoting=csv.QUOTE_ALL)
         writer.writerow(['source', 'target', 'value'])
         for source, target, data in G.edges(data=True):
             writer.writerow([source, target, data["weight"]])
-    print(f'Data successfully exported to {export_path}.')
     
 
 def export_path(df: pd.DataFrame, path: list, export_path: str):
     """
     Export the calculated path to a sqlite3 database while also retaining the Track Identifier and Media Duration In Milliseconds columns.
     """
+    print(f'Exporting optimal path to {export_path}...')
     path_df = pd.DataFrame(path, columns=['Song Name'])
     merged_df = path_df.merge(df[['Song Name', 'Track Identifier', 'Media Duration In Milliseconds']], on='Song Name', how='left').drop_duplicates(subset='Song Name')
     with sqlite3.connect(export_path) as conn:
         merged_df.to_sql('exported_path', conn, if_exists='replace', index=False)
-    print(f'Data successfully exported to {export_path}.')
 
 
 if __name__ == '__main__':
     df = preprocess_data(df=pd.read_sql('SELECT * FROM crossreference', sqlite3.connect('identified_songs.sqlite3')))
     G = graph_data(df=df)
-    path = find_path(G=G, current_node=random.choice(list(G.nodes())))
-    export_path(df=df, path=path[0], export_path='calculated_path.sqlite3')
     # export_graph(G=G, export_path='graph.csv') # Uncomment this line to export the graph as a csv file for visualization purposes in Cosmograph
+    path = find_path(G=G, start_node=random.choice(list(G.nodes())))
+    export_path(df=df, path=path, export_path='calculated_path.sqlite3')
