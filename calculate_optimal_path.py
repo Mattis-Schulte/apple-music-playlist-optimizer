@@ -1,6 +1,6 @@
-from collections import Counter
 import csv
 import networkx as nx
+import numpy as np
 import pandas as pd
 import random
 import sqlite3
@@ -54,9 +54,9 @@ def find_path(G: nx.Graph, start_node: str) -> list:
     path = [start_node]
     visited = set(path)
 
-    # Find the most common weight in the graph
-    weights = Counter(data['weight'] for u, v, data in G.edges(data=True))
-    mode_weight = weights.most_common(1)[0][0]
+    # Find the median weight of the graph
+    edge_weights = nx.get_edge_attributes(G, 'weight').values()
+    median_weight = np.median(list(edge_weights))
 
     # Precompute the shortest paths between each node
     print('Precomputing shortest paths...') 
@@ -80,7 +80,7 @@ def find_path(G: nx.Graph, start_node: str) -> list:
             next_node, path_length = min(neighbors, key=lambda x: (x[1], -G.degree(x[0], weight='weight')))
             
             # Add the average weight of the graph in case of a jump
-            total_weight += mode_weight
+            total_weight += median_weight *  (1 / path_length)
             total_jumps += 1
 
         # Visit the next node
