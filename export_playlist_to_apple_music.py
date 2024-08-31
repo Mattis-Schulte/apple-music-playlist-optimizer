@@ -52,6 +52,11 @@ def get_playlist_id_and_add_songs(song_ids: list) -> str:
         }
     })
     playlist_response = http.request('POST', f'{HOST}/v1/me/library/playlists', headers=HEADERS, body=playlist_body)
+    
+    if playlist_response.status != 201:
+        print(f'IMPORTANT: Error {playlist_response.status} - Could not create playlist.')
+        exit(1)
+    
     playlist_id = json.loads(playlist_response.data)['data'][0]['id']
     print(f'Playlist created with ID: {playlist_id}')
 
@@ -72,9 +77,9 @@ def get_playlist_id_and_add_songs(song_ids: list) -> str:
                     print(f'Adding equivalent song id {equivalent_song_id} for {song_id} to the playlist...')
                     response = add_song_to_playlist(http, playlist_id, equivalent_song_id)
             if response.status not in (200, 204):
-                print(f'ERROR {response.status} - {response.data.decode("utf-8")}')
+                print(f'Error {response.status} - {response.data.decode("utf-8")}')
         elif response.status not in (200, 204):
-            print(f'ERROR {response.status} - {response.data.decode("utf-8")}')
+            print(f'Error {response.status} - {response.data.decode("utf-8")}')
 
     return playlist_id
 
